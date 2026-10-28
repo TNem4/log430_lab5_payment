@@ -1,0 +1,124 @@
+
+# ============================================================
+# Payment database storage
+# ============================================================
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mysql-payments-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+
+---
+# ============================================================
+# MySQL database for payments
+# ============================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mysql-payments
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mysql-payments
+  template:
+    metadata:
+      labels:
+        app: mysql-payments
+    spec:
+      containers:
+        - name: mysql
+          image: mysql:8.4.7
+          env:
+            - name: MYSQL_ROOT_PASSWORD
+              value: "root"
+            - name: MYSQL_DATABASE
+              value: labo05_payments_db
+            - name: MYSQL_USER
+              value: labo05
+            - name: MYSQL_PASSWORD
+              value: labo05
+          ports:
+            - containerPort: 3306
+          volumeMounts:
+            - name: mysql-payments-data
+              mountPath: /var/lib/mysql
+            - name: payments-db-init
+              mountPath: /docker-entrypoint-initdb.d
+          livenessProbe:
+            exec:
+              command:
+                - mysqladmin
+                - ping
+                - -h
+                - localhost
+                - -u
+                - root
+                - -proot
+            initialDelaySeconds: 30
+            periodSeconds: 60
+      volumes:
+        - name: mysql-payments-data
+          persistentVolumeClaim:
+            claimName: mysql-payments-pvc
+        - name: payments-db-init
+          configMap:
+            name: payments-db-init
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mysql-payments
+spec:
+  selector:
+    app: mysql-payments
+  ports:
+    - port: 3306
+      targetPort: 3306
+
+---
+# ============================================================
+# Payments API
+# ============================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: payments-api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: payments-api
+  template:
+    metadata:
+      labels:
+        app: payments-api
+    spec:
+      containers:
+        - name: payments-api
+          image: ghcr.io/tnem4/log430_lab5_payment:latest
+          imagePullPolicy: Always
+          env:
+            - name: PYTHONUNBUFFERED
+              value: "1"
+          ports:
+            - containerPort: 5009
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: payments-api
+spec:
+  selector:
+    app: payments-api
+  ports:
+    - port: 5009
+      targetPort: 5009
+  type: NodePort
