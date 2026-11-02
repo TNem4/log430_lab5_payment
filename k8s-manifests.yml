@@ -107,6 +107,9 @@ spec:
           env:
             - name: PYTHONUNBUFFERED
               value: "1"
+          envFrom:
+            - secretRef:
+                name: payments-config
           ports:
             - containerPort: 5009
 
